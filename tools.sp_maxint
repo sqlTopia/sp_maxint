@@ -1,42 +1,63 @@
 CREATE OR ALTER PROCEDURE tools.sp_maxint
 AS
 
-SELECT          SCHEMA_NAME(s.schema_id) AS schema_name,
-                s.name AS sequence_name,
-                t.name AS datatype_name,
-                col.name AS column_name,
-                s.current_value,
-                s.maximum_value,
-                FORMAT(CAST(s.current_value AS FLOAT) / CAST(s.maximum_value AS FLOAT), 'P') AS used_percentage
-FROM            sys.sequences AS s
-INNER JOIN      sys.types AS t ON t.user_type_id = s.user_type_id
-LEFT JOIN       sys.default_constraints AS def ON def.definition = CONCAT(N'(NEXT VALUE FOR ', QUOTENAME(SCHEMA_NAME(s.schema_id)), N'.', QUOTENAME(s.name), N')')
-LEFT JOIN       sys.columns AS col ON col.object_id = def.parent_object_id
-                        AND col.column_id = def.parent_column_id
-ORDER BY        used_percentage DESC;
+WITH cte
+AS (
+        SELECT          SCHEMA_NAME(s.schema_id) AS schema_name,
+                        s.name AS sequence_name,
+                        t.name AS datatype_name,
+                        col.name AS column_name,
+                        s.current_value,
+                        s.maximum_value
+        FROM            sys.sequences AS s
+        INNER JOIN      sys.types AS t ON t.user_type_id = s.user_type_id
+        LEFT JOIN       sys.default_constraints AS def ON def.definition = CONCAT(N'(NEXT VALUE FOR ', QUOTENAME(SCHEMA_NAME(s.schema_id)), N'.', QUOTENAME(s.name), N')')
+        LEFT JOIN       sys.columns AS col ON col.object_id = def.parent_object_id
+                                AND col.column_id = def.parent_column_id
+)
+SELECT          schema_name,
+                sequence_name,
+                datatype_name,
+                column_name,
+                current_value,
+                maximum_value,
+                FORMAT(CAST(current_value AS FLOAT) / CAST(maximum_value AS FLOAT), 'P') AS used_percentage
+FROM            cte
+ORDER BY        CAST(current_value AS FLOAT) / CAST(maximum_value AS FLOAT) DESC;
 
-SELECT          OBJECT_SCHEMA_NAME(c.object_id) AS schema_name,
-                OBJECT_NAME(c.object_id) AS table_name,
-                t.name AS datatype_name,
-                c.name AS column_name,
-                IDENT_CURRENT(CONCAT(OBJECT_SCHEMA_NAME(c.object_id), '.', OBJECT_NAME(c.object_id))) AS current_value,
-                CASE
-                        WHEN t.name = N'TINYINT' THEN CAST(255 AS DECIMAL(38, 0))
-                        WHEN t.name = N'SMALLINT' THEN CAST(32767 AS DECIMAL(38, 0))
-                        WHEN t.name = N'INT' THEN CAST(2147483647 AS DECIMAL(38, 0))
-                        WHEN t.name = N'BIGINT' THEN CAST(9223372036854775807 AS DECIMAL(38, 0))
-                        WHEN t.name IN (N'NUMERIC', N'DECIMAL') THEN CAST(REPLICATE('9', c.precision) AS DECIMAL(38, 0))
-                        ELSE CAST(NULL AS DECIMAL(38 ,0))
-                END AS maximum_value,
-                FORMAT(CAST(IDENT_CURRENT(CONCAT(OBJECT_SCHEMA_NAME(c.object_id), '.', OBJECT_NAME(c.object_id))) AS FLOAT) /   CASE
-                                                                                                                                        WHEN t.name = N'TINYINT' THEN 255E
-                                                                                                                                        WHEN t.name = N'SMALLINT' THEN 32656E
-                                                                                                                                        WHEN t.name = N'INT' THEN 2147483647E
-                                                                                                                                        WHEN t.name = N'BIGINT' THEN 9223372036854775807E
-                                                                                                                                        WHEN t.name IN (N'NUMERIC', N'DECIMAL') THEN CAST(REPLICATE('9', c.precision) AS FLOAT)
-                                                                                                                                        ELSE NULL
-                                                                                                                                END, 'P') AS used_percentage
-FROM            sys.columns AS c
-INNER JOIN      sys.types AS t ON t.user_type_id = c.user_type_id
-WHERE           c.is_identity = 1
-ORDER BY        used_percentage DESC;
+WITH cte
+AS (
+        SELECT          OBJECT_SCHEMA_NAME(c.object_id) AS schema_name,
+                        OBJECT_NAME(c.object_id) AS table_name,
+                        t.name AS datatype_name,
+                        c.name AS column_name,
+                        IDENT_CURRENT(CONCAT(OBJECT_SCHEMA_NAME(c.object_id), '.', OBJECT_NAME(c.object_id))) AS current_value,
+                        CASE
+                                WHEN t.name = N'TINYINT' THEN CAST(255 AS DECIMAL(38, 0))
+                                WHEN t.name = N'SMALLINT' THEN CAST(32767 AS DECIMAL(38, 0))
+                                WHEN t.name = N'INT' THEN CAST(2147483647 AS DECIMAL(38, 0))
+                                WHEN t.name = N'BIGINT' THEN CAST(9223372036854775807 AS DECIMAL(38, 0))
+                                WHEN t.name IN (N'NUMERIC', N'DECIMAL') THEN CAST(REPLICATE('9', c.precision) AS DECIMAL(38, 0))
+                                ELSE CAST(NULL AS DECIMAL(38 ,0))
+                        END AS maximum_value,
+                        CASE
+                                WHEN t.name = N'TINYINT' THEN 255E
+                                WHEN t.name = N'SMALLINT' THEN 32656E
+                                WHEN t.name = N'INT' THEN 2147483647E
+                                WHEN t.name = N'BIGINT' THEN 9223372036854775807E
+                                WHEN t.name IN (N'NUMERIC', N'DECIMAL') THEN CAST(REPLICATE('9', c.precision) AS FLOAT)
+                                ELSE NULL
+                        END AS used_percentage
+        FROM            sys.columns AS c
+        INNER JOIN      sys.types AS t ON t.user_type_id = c.user_type_id
+        WHERE           c.is_identity = 1
+)
+SELECT          schema_name,
+                table_name,
+                datatype_name,
+                column_name,
+                current_value,
+                maximum_value,
+                FORMAT(CAST(current_value AS FLOAT) / used_percentage, 'P') AS used_percentage
+FROM            cte
+ORDER BY        current_value / used_percentage DESC;
