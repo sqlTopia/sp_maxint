@@ -58,6 +58,6 @@ SELECT          schema_name,
                 column_name,
                 current_value,
                 maximum_value,
-                FORMAT(CAST(current_value AS FLOAT) / used_percentage, 'P') AS used_percentage
+                FORMAT(current_value / used_percentage, 'P') AS used_percentage
 FROM            cte
 ORDER BY        current_value / used_percentage DESC;
